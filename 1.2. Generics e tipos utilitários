@@ -1,0 +1,92 @@
+// ==============================
+// TIPOS
+// ==============================
+
+interface PaginaParams {
+  pagina: number;   // começa em 1
+  tamanho: number;  // itens por página
+}
+
+interface Pagina<T> {
+  itens: T[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  total_paginas: number;
+}
+
+// ==============================
+// FUNÇÃO GENÉRICA
+// ==============================
+
+function filtrar_e_paginar<T>(
+  data: T[],
+  filter_fn: (item: T) => boolean,
+  params: PaginaParams
+): Pagina<T> {
+
+  validar_parametros(params);
+
+  // Filtra os dados
+  const dados_filtrados: T[] = data.filter(filter_fn);
+
+  const total: number = dados_filtrados.length;
+  const total_paginas: number = Math.ceil(total / params.tamanho);
+
+  // Ajuste de página (evita overflow)
+  const pagina_atual: number = Math.min(
+    Math.max(params.pagina, 1),
+    total_paginas || 1
+  );
+
+  const inicio: number = (pagina_atual - 1) * params.tamanho;
+  const fim: number = inicio + params.tamanho;
+
+  const itens: T[] = dados_filtrados.slice(inicio, fim);
+
+  return {
+    itens,
+    total,
+    pagina: pagina_atual,
+    tamanho: params.tamanho,
+    total_paginas
+  };
+}
+
+// ==============================
+// VALIDAÇÃO
+// ==============================
+
+function validar_parametros(params: PaginaParams): void {
+  if (!Number.isInteger(params.pagina) || params.pagina < 1) {
+    throw new Error('Parâmetro "pagina" deve ser inteiro >= 1');
+  }
+
+  if (!Number.isInteger(params.tamanho) || params.tamanho < 1) {
+    throw new Error('Parâmetro "tamanho" deve ser inteiro >= 1');
+  }
+}
+
+Exemplo de uso
+
+interface Produto {
+  id: number;
+  descricao: string;
+  quantidade_estoque: number;
+}
+
+const produtos: Produto[] = [
+  { id: 1, descricao: 'Maçã', quantidade_estoque: 20 },
+  { id: 2, descricao: 'Laranja', quantidade_estoque: 0 },
+  { id: 3, descricao: 'Limão', quantidade_estoque: 15 },
+  { id: 4, descricao: 'Banana', quantidade_estoque: 5 },
+  { id: 5, descricao: 'Uva', quantidade_estoque: 8 }
+];
+
+const resultado = filtrar_e_paginar(
+  produtos,
+  (p) => p.quantidade_estoque > 0,
+  { pagina: 1, tamanho: 2 }
+);
+
+console.log(resultado);
