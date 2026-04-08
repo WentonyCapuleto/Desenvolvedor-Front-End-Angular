@@ -1,0 +1,99 @@
+Componente (Signals + computed + output)
+
+import {
+  ChangeDetectionStrategy,
+  Component,
+  signal,
+  computed,
+  output
+} from '@angular/core';
+
+// ==============================
+// MODELO
+// ==============================
+
+interface ItemCarrinho {
+  id: number;
+  nome: string;
+  preco: number;
+  quantidade: number;
+}
+
+// ==============================
+// COMPONENT
+// ==============================
+
+@Component({
+  selector: 'app-carrinho-contador',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <h2>Total: {{ total() | currency:'BRL' }}</h2>
+
+    <ul>
+      <li *ngFor="let item of itens()">
+        {{ item.nome }} - {{ item.quantidade }} x {{ item.preco | currency:'BRL' }}
+
+        <button (click)="adicionar_item(item.id)">+</button>
+        <button (click)="remover_item(item.id)">-</button>
+      </li>
+    </ul>
+  `
+})
+export class CarrinhoContadorComponent {
+
+  // ==============================
+  // SIGNAL (estado)
+  // ==============================
+  readonly itens = signal<ItemCarrinho[]>([
+    { id: 1, nome: 'Produto A', preco: 10, quantidade: 1 },
+    { id: 2, nome: 'Produto B', preco: 20, quantidade: 2 }
+  ]);
+
+  // ==============================
+  // COMPUTED (derivação)
+  // ==============================
+  readonly total = computed<number>(() =>
+    this.itens().reduce((acc, item) =>
+      acc + (item.preco * item.quantidade), 0)
+  );
+
+  // ==============================
+  // OUTPUT (emite quando total muda)
+  // ==============================
+  readonly total_change = output<number>();
+
+  constructor() {
+    // efeito reativo para emitir mudanças
+    computed(() => {
+      const valor = this.total();
+      this.total_change.emit(valor);
+      return valor;
+    });
+  }
+
+  // ==============================
+  // MÉTODOS
+  // ==============================
+  adicionar_item(item_id: number): void {
+    this.itens.update((lista) =>
+      lista.map(item =>
+        item.id === item_id
+          ? { ...item, quantidade: item.quantidade + 1 }
+          : item
+      )
+    );
+  }
+
+  remover_item(item_id: number): void {
+    this.itens.update((lista) =>
+      lista
+        .map(item =>
+          item.id === item_id
+            ? { ...item, quantidade: item.quantidade - 1 }
+            : item
+        )
+        .filter(item => item.quantidade > 0)
+    );
+  }
+}
