@@ -1,0 +1,166 @@
+Serviço:
+
+// ==============================
+// SERVICE
+// ==============================
+
+import { Injectable } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import { delay } from 'rxjs/operators';
+
+export interface Produto {
+  id: number;
+  descricao: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class ProdutoService {
+
+  private readonly produtos: Produto[] = [
+    { id: 1, descricao: 'Maçã' },
+    { id: 2, descricao: 'Laranja' },
+    { id: 3, descricao: 'Limão' },
+    { id: 4, descricao: 'Banana' },
+    { id: 5, descricao: 'Uva' }
+  ];
+
+  buscar(termo: string): Observable<Produto[]> {
+    const termo_normalizado = termo.toLowerCase().trim();
+
+    const resultado = this.produtos.filter(p =>
+      p.descricao.toLowerCase().includes(termo_normalizado)
+    );
+
+    // simula API
+    return of(resultado).pipe(delay(800));
+  }
+}
+
+Componente (reativo e sem leaks)
+
+// ==============================
+// COMPONENT
+// ==============================
+
+import {
+  ChangeDetectionStrategy,
+  Component
+} from '@angular/core';
+
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import {
+  Observable,
+  of
+} from 'rxjs';
+
+import {
+  debounceTime,
+  distinctUntilChanged,
+  switchMap,
+  map,
+  catchError,
+  startWith
+} from 'rxjs/operators';
+
+import { ProdutoService, Produto } from './produto.service';
+
+interface ViewModel {
+  loading: boolean;
+  produtos: Produto[];
+  erro: string | null;
+}
+
+@Component({
+  selector: 'app-busca',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  templateUrl: './busca.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class BuscaComponent {
+
+  public readonly campo_busca = new FormControl<string>('', { nonNullable: true });
+
+  public readonly vm$: Observable<ViewModel> = this.campo_busca.valueChanges.pipe(
+
+    startWith(''),
+
+    debounceTime(500),
+
+    distinctUntilChanged(),
+
+    switchMap((termo: string) => {
+
+      if (!termo.trim()) {
+        return of<ViewModel>({
+          loading: false,
+          produtos: [],
+          erro: null
+        });
+      }
+
+      return this.produtoService.buscar(termo).pipe(
+
+        map((produtos: Produto[]) => ({
+          loading: false,
+          produtos,
+          erro: null
+        })),
+
+        catchError((error: unknown) => {
+          const mensagem = error instanceof Error
+            ? error.message
+            : 'Erro ao buscar produtos';
+
+          return of<ViewModel>({
+            loading: false,
+            produtos: [],
+            erro: mensagem
+          });
+        }),
+
+        // emite estado de loading antes da resposta
+        startWith({
+          loading: true,
+          produtos: [],
+          erro: null
+        })
+      );
+    })
+  );
+
+  constructor(private readonly produtoService: ProdutoService) {}
+}
+
+Template (async pipe + loading)
+
+<!-- ==============================
+TEMPLATE
+============================== -->
+
+<input
+  type="text"
+  [formControl]="campo_busca"
+  placeholder="Buscar produto..."
+/>
+
+<ng-container *ngIf="vm$ | async as vm">
+
+  <!-- Loading -->
+  <div *ngIf="vm.loading">
+     Carregando...
+  </div>
+
+  <!-- Erro -->
+  <div *ngIf="vm.erro">
+     {{ vm.erro }}
+  </div>
+
+  <!-- Resultado -->
+  <ul *ngIf="!vm.loading && !vm.erro">
+    <li *ngFor="let produto of vm.produtos">
+      {{ produto.descricao }}
+    </li>
+  </ul>
+
+</ng-container>
