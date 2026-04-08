@@ -1,0 +1,5 @@
+trackBy evita recriação desnecessária do DOM ao identificar itens por chave única (ex: id), melhorando performance em listas grandes.
+
+OnPush reduz ciclos de change detection, atualizando apenas quando há mudanças relevantes.
+
+Já Default verifica tudo sempre, gerando alto custo e pior desempenho em listas com muitos itens.
