@@ -1,0 +1,27 @@
+O valor de texto é atualizado, mas a view não é renderizada novamente.
+
+Ele só atualiza a view quando ocorre um destes gatilhos:
+
+Mudança de referência em @Input()
+Evento do template (click, input, etc.)
+async pipe
+Execução dentro da zona Angular que dispare CD
+Chamadas manuais (markForCheck, detectChanges)
+
+Opção 1 (RECOMENDADA): ChangeDetectorRef.markForCheck()
+
+import { ChangeDetectorRef } from '@angular/core';
+
+constructor(
+  private readonly pessoaService: PessoaService,
+  private readonly cdr: ChangeDetectorRef
+) {}
+
+ngOnInit(): void {
+  this.subscriptionBuscarPessoa = this.pessoaService.buscarPorId(1).subscribe((pessoa) => {
+    this.texto = `Nome: ${pessoa.nome}`;
+    this.cdr.markForCheck(); // força o Angular a verificar o componente
+  });
+
+  setInterval(() => this.contador++, 1000);
+}
