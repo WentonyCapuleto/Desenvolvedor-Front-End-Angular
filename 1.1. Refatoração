@@ -1,0 +1,148 @@
+// ==============================
+// DOMAIN (Modelo)
+// ==============================
+
+class Produto {
+  public readonly id: number;
+  public readonly descricao: string;
+  public quantidade_estoque: number;
+
+  constructor(id: number, descricao: string, quantidade_estoque: number) {
+    this.validar_dados(id, descricao, quantidade_estoque);
+
+    this.id = id;
+    this.descricao = descricao;
+    this.quantidade_estoque = quantidade_estoque;
+  }
+
+  private validar_dados(id: number, descricao: string, quantidade_estoque: number): void {
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new Error('ID inválido');
+    }
+
+    if (!descricao || descricao.trim().length === 0) {
+      throw new Error('Descrição inválida');
+    }
+
+    if (!Number.isInteger(quantidade_estoque) || quantidade_estoque < 0) {
+      throw new Error('Quantidade em estoque inválida');
+    }
+  }
+}
+
+// ==============================
+// SERVICE (Regra de negócio)
+// ==============================
+
+class Verdureira {
+  private produtos: Map<number, Produto>;
+
+  constructor() {
+    this.produtos = new Map<number, Produto>();
+    this.carregar_produtos_iniciais();
+  }
+
+  private carregar_produtos_iniciais(): void {
+    const lista_produtos = [
+      new Produto(1, 'Maçã', 20),
+      new Produto(2, 'Laranja', 0),
+      new Produto(3, 'Limão', 20)
+    ];
+
+    for (const produto of lista_produtos) {
+      this.produtos.set(produto.id, produto);
+    }
+  }
+
+  private buscar_produto_por_id(produto_id: number): Produto | undefined {
+    if (!Number.isInteger(produto_id)) {
+      throw new Error('ID do produto deve ser um número inteiro');
+    }
+
+    return this.produtos.get(produto_id);
+  }
+
+  public get_descricao_produto(produto_id: number): string {
+    const produto = this.buscar_produto_por_id(produto_id);
+
+    if (!produto) {
+      throw new Error('Produto não encontrado');
+    }
+
+    return this.formatar_descricao(produto);
+  }
+
+  public has_estoque_produto(produto_id: number): boolean {
+    const produto = this.buscar_produto_por_id(produto_id);
+
+    if (!produto) {
+      return false;
+    }
+
+    return produto.quantidade_estoque > 0;
+  }
+
+  public adicionar_estoque(produto_id: number, quantidade: number): void {
+    const produto = this.buscar_produto_por_id(produto_id);
+
+    if (!produto) {
+      throw new Error('Produto não encontrado');
+    }
+
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      throw new Error('Quantidade inválida para adição');
+    }
+
+    produto.quantidade_estoque += quantidade;
+  }
+
+  public remover_estoque(produto_id: number, quantidade: number): void {
+    const produto = this.buscar_produto_por_id(produto_id);
+
+    if (!produto) {
+      throw new Error('Produto não encontrado');
+    }
+
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      throw new Error('Quantidade inválida para remoção');
+    }
+
+    if (produto.quantidade_estoque < quantidade) {
+      throw new Error('Estoque insuficiente');
+    }
+
+    produto.quantidade_estoque -= quantidade;
+  }
+
+  private formatar_descricao(produto: Produto): string {
+    return `${produto.id} - ${produto.descricao} (${produto.quantidade_estoque}x)`;
+  }
+}
+
+// ==============================
+// USO / TESTE
+// ==============================
+
+function main(): void {
+  try {
+    const verdureira = new Verdureira();
+
+    console.log(verdureira.get_descricao_produto(1));
+    console.log('Tem estoque?', verdureira.has_estoque_produto(2));
+
+    verdureira.adicionar_estoque(2, 10);
+    console.log(verdureira.get_descricao_produto(2));
+
+    verdureira.remover_estoque(1, 5);
+    console.log(verdureira.get_descricao_produto(1));
+
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Erro:', error.message);
+    } else {
+      console.error('Erro desconhecido');
+    }
+  }
+}
+
+main();
