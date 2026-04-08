@@ -1,0 +1,91 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Injectable
+} from '@angular/core';
+
+import { Observable, of } from 'rxjs';
+import { delay, switchMap, map, catchError, shareReplay } from 'rxjs/operators';
+
+// ==============================
+// MODELOS
+// ==============================
+
+interface Pessoa {
+  id: number;
+  nome: string;
+}
+
+// ==============================
+// SERVICE (mock)
+// ==============================
+
+@Injectable()
+class PessoaService {
+  buscarPorId(id: number): Observable<Pessoa> {
+    return of({ id, nome: 'João' }).pipe(delay(500));
+  }
+
+  buscarQuantidadeFamiliares(id: number): Observable<number> {
+    return of(3).pipe(delay(500));
+  }
+}
+
+// ==============================
+// COMPONENT
+// ==============================
+
+@Component({
+  selector: 'app-root',
+  providers: [PessoaService],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <ng-container *ngIf="vm$ | async as vm">
+      <h1 *ngIf="!vm.erro; else erroTpl">
+        {{ vm.texto }}
+      </h1>
+
+      <ng-template #erroTpl>
+        <h1>Erro: {{ vm.erro }}</h1>
+      </ng-template>
+    </ng-container>
+  `
+})
+export class AppComponent {
+
+  private readonly pessoa_id: number = 1;
+
+  // ViewModel reativo
+  public readonly vm$: Observable<{
+    texto: string;
+    erro: string | null;
+  }> = this.pessoaService.buscarPorId(this.pessoa_id).pipe(
+
+    // Encadeamento dependente
+    switchMap((pessoa) =>
+      this.pessoaService.buscarQuantidadeFamiliares(this.pessoa_id).pipe(
+        map((qtd) => ({
+          texto: `Nome: ${pessoa.nome} | familiares: ${qtd}`,
+          erro: null
+        }))
+      )
+    ),
+
+    // Tratamento de erro centralizado
+    catchError((error: unknown) => {
+      const mensagem = error instanceof Error
+        ? error.message
+        : 'Erro desconhecido';
+
+      return of({
+        texto: '',
+        erro: mensagem
+      });
+    }),
+
+    // Cache + evita múltiplas execuções desnecessárias
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  constructor(private readonly pessoaService: PessoaService) {}
+}
