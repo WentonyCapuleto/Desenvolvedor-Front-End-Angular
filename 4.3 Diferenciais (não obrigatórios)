@@ -1,0 +1,178 @@
+export interface Usuario {
+  id: number;
+  nome: string;
+  email: string;
+  cpf: string;
+  telefone: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class UsuarioService {
+
+  private usuarios: Usuario[] = [...Array(50)].map((_, i) => ({
+    id: i + 1,
+    nome: `User ${i + 1}`,
+    email: `user${i}@email.com`,
+    cpf: '12345678901',
+    telefone: '11999999999'
+  }));
+
+  listar(
+    termo: string,
+    pagina: number,
+    tamanho: number
+  ): Observable<{ data: Usuario[]; total: number }> {
+
+    return of(this.usuarios).pipe(
+
+      map(lista =>
+        lista.filter(u =>
+          u.nome.toLowerCase().includes(termo.toLowerCase())
+        )
+      ),
+
+      map(filtrado => ({
+        total: filtrado.length,
+        data: filtrado.slice(
+          (pagina - 1) * tamanho,
+          pagina * tamanho
+        )
+      })),
+
+      delay(400)
+    );
+  }
+}
+
+import { AbstractControl, ValidationErrors } from '@angular/forms';
+
+export function cpf_validator(control: AbstractControl): ValidationErrors | null {
+  return /^\d{11}$/.test(control.value) ? null : { cpf_invalido: true };
+}
+
+export function telefone_validator(control: AbstractControl): ValidationErrors | null {
+  return /^\d{10,11}$/.test(control.value) ? null : { telefone_invalido: true };
+}
+
+@Component({
+  selector: 'ui-usuario-modal',
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule],
+  template: `
+  <div class="modal">
+    <form [formGroup]="form" (ngSubmit)="submit()">
+
+      <input formControlName="nome" placeholder="Nome" />
+      <small *ngIf="form.controls.nome.invalid && form.controls.nome.touched">Obrigatório</small>
+
+      <input formControlName="email" placeholder="Email" />
+      <small *ngIf="form.controls.email.invalid">Email inválido</small>
+
+      <input formControlName="cpf" placeholder="CPF" />
+      <small *ngIf="form.controls.cpf.errors?.cpf_invalido">CPF inválido</small>
+
+      <input formControlName="telefone" placeholder="Telefone" />
+      <small *ngIf="form.controls.telefone.errors?.telefone_invalido">Telefone inválido</small>
+
+      <button [disabled]="form.invalid">Salvar</button>
+
+    </form>
+  </div>
+  `
+})
+export class UiUsuarioModal {
+
+  @Input() usuario!: Usuario;
+  @Output() salvar = new EventEmitter<Usuario>();
+
+  form = this.fb.group({
+    id: [0],
+    nome: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+    cpf: ['', [Validators.required, cpf_validator]],
+    telefone: ['', [Validators.required, telefone_validator]]
+  });
+
+  constructor(private fb: FormBuilder) {}
+
+  ngOnInit() {
+    if (this.usuario) this.form.patchValue(this.usuario);
+  }
+
+  submit() {
+    this.salvar.emit(this.form.getRawValue());
+  }
+}
+
+@Component({
+  selector: 'feature-users',
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, UiUsuarioModal],
+  template: `
+  <input [formControl]="busca" placeholder="Buscar..." />
+
+  <div *ngIf="vm$ | async as vm">
+
+    <div *ngIf="vm.loading">Loading...</div>
+
+    <div class="grid">
+      <div *ngFor="let u of vm.data">
+        {{ u.nome }}
+      </div>
+    </div>
+
+    <button (click)="prev()" [disabled]="pagina === 1">Prev</button>
+    <button (click)="next()">Next</button>
+
+    <p>Total: {{ vm.total }}</p>
+
+  </div>
+  `
+})
+export class FeatureUsersComponent {
+
+  busca = new FormControl('', { nonNullable: true });
+
+  pagina = 1;
+  tamanho = 10;
+
+  private refresh$ = new BehaviorSubject<void>(undefined);
+
+  vm$ = combineLatest([
+    this.busca.valueChanges.pipe(
+      startWith(''),
+      debounceTime(300),
+      distinctUntilChanged()
+    ),
+    this.refresh$
+  ]).pipe(
+
+    switchMap(([termo]) =>
+      this.service.listar(termo, this.pagina, this.tamanho).pipe(
+
+        map(res => ({
+          ...res,
+          loading: false
+        })),
+
+        catchError(() =>
+          of({ data: [], total: 0, loading: false })
+        ),
+
+        startWith({ data: [], total: 0, loading: true })
+      )
+    )
+  );
+
+  constructor(private service: UsuarioService) {}
+
+  next() {
+    this.pagina++;
+    this.refresh$.next();
+  }
+
+  prev() {
+    this.pagina--;
+    this.refresh$.next();
+  }
+}
