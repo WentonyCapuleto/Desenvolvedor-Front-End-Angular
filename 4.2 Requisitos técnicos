@@ -1,0 +1,264 @@
+// ==============================
+// IMPORTS
+// ==============================
+
+import {
+  Component,
+  Injectable,
+  ChangeDetectionStrategy,
+  Input,
+  Output,
+  EventEmitter
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  Validators,
+  ReactiveFormsModule,
+  FormControl
+} from '@angular/forms';
+
+import {
+  Observable,
+  of
+} from 'rxjs';
+
+import {
+  debounceTime,
+  distinctUntilChanged,
+  switchMap,
+  catchError,
+  map,
+  startWith,
+  delay
+} from 'rxjs/operators';
+
+// ==============================
+// MODEL
+// ==============================
+
+interface Usuario {
+  id: number;
+  nome: string;
+  email: string;
+  cpf: string;
+  telefone: string;
+  tipo_telefone: 'celular' | 'fixo';
+}
+
+// ==============================
+// SERVICE (MOCK)
+// ==============================
+
+@Injectable({ providedIn: 'root' })
+class UsuarioService {
+
+  private usuarios: Usuario[] = [
+    { id: 1, nome: 'João', email: 'joao@email.com', cpf: '123', telefone: '999', tipo_telefone: 'celular' },
+    { id: 2, nome: 'Maria', email: 'maria@email.com', cpf: '456', telefone: '888', tipo_telefone: 'fixo' }
+  ];
+
+  listar(): Observable<Usuario[]> {
+    return of(this.usuarios).pipe(delay(500));
+  }
+
+  salvar(usuario: Usuario): Observable<Usuario> {
+    if (!usuario.id) {
+      usuario.id = Date.now();
+      this.usuarios.push(usuario);
+    } else {
+      this.usuarios = this.usuarios.map(u => u.id === usuario.id ? usuario : u);
+    }
+    return of(usuario).pipe(delay(300));
+  }
+}
+
+// ==============================
+// MODAL COMPONENT
+// ==============================
+
+@Component({
+  selector: 'app-usuario-modal',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  template: `
+  <div class="modal">
+    <form [formGroup]="form" (ngSubmit)="submit()">
+
+      <h2>{{ form.value.id ? 'Editar' : 'Novo' }} usuário</h2>
+
+      <input formControlName="nome" placeholder="Nome" />
+      <div *ngIf="form.controls.nome.touched && form.controls.nome.invalid">Nome obrigatório</div>
+
+      <input formControlName="email" placeholder="Email" />
+      <div *ngIf="form.controls.email.touched && form.controls.email.invalid">Email inválido</div>
+
+      <input formControlName="cpf" placeholder="CPF" />
+      <input formControlName="telefone" placeholder="Telefone" />
+
+      <select formControlName="tipo_telefone">
+        <option value="celular">Celular</option>
+        <option value="fixo">Fixo</option>
+      </select>
+
+      <button type="submit" [disabled]="form.invalid">Salvar</button>
+      <button type="button" (click)="fechar.emit()">Cancelar</button>
+
+    </form>
+  </div>
+  `
+})
+class UsuarioModalComponent {
+
+  @Input() usuario: Usuario | null = null;
+  @Output() salvar = new EventEmitter<Usuario>();
+  @Output() fechar = new EventEmitter<void>();
+
+  form = this.fb.group({
+    id: [0],
+    nome: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+    cpf: ['', Validators.required],
+    telefone: ['', Validators.required],
+    tipo_telefone: ['celular', Validators.required]
+  });
+
+  constructor(private fb: FormBuilder) {}
+
+  ngOnInit(): void {
+    if (this.usuario) {
+      this.form.patchValue(this.usuario);
+    }
+  }
+
+  submit(): void {
+    if (this.form.valid) {
+      this.salvar.emit(this.form.getRawValue() as Usuario);
+    }
+  }
+}
+
+// ==============================
+// MAIN COMPONENT
+// ==============================
+
+@Component({
+  selector: 'app-usuarios',
+  standalone: true,
+  imports: [ReactiveFormsModule, UsuarioModalComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+  <div class="container">
+
+    <div class="header">
+      <input [formControl]="filtro" placeholder="Buscar usuário..." />
+      <button class="btn-add" (click)="abrir_modal()">+ Novo</button>
+    </div>
+
+    <ng-container *ngIf="vm$ | async as vm">
+
+      <div *ngIf="vm.loading">Carregando...</div>
+      <div *ngIf="vm.erro">{{ vm.erro }}</div>
+
+      <div class="grid">
+        <div class="card" *ngFor="let user of vm.usuarios">
+          <h3>{{ user.nome }}</h3>
+          <p>{{ user.email }}</p>
+          <button (click)="abrir_modal(user)">Editar</button>
+        </div>
+      </div>
+
+    </ng-container>
+
+    <app-usuario-modal
+      *ngIf="modal_aberto"
+      [usuario]="usuario_edicao"
+      (salvar)="salvar($event)"
+      (fechar)="fechar_modal()">
+    </app-usuario-modal>
+
+  </div>
+  `
+})
+export class UsuariosComponent {
+
+  filtro = new FormControl<string>('', { nonNullable: true });
+
+  modal_aberto = false;
+  usuario_edicao: Usuario | null = null;
+
+  vm$ = this.filtro.valueChanges.pipe(
+
+    startWith(''),
+
+    debounceTime(300),
+
+    distinctUntilChanged(),
+
+    switchMap((termo) =>
+      this.service.listar().pipe(
+
+        map(usuarios => ({
+          loading: false,
+          usuarios: usuarios.filter(u =>
+            u.nome.toLowerCase().includes(termo.toLowerCase())
+          ),
+          erro: null
+        })),
+
+        catchError(() =>
+          of({
+            loading: false,
+            usuarios: [],
+            erro: 'Erro ao carregar usuários'
+          })
+        ),
+
+        startWith({
+          loading: true,
+          usuarios: [],
+          erro: null
+        })
+      )
+    )
+  );
+
+  constructor(private service: UsuarioService) {}
+
+  abrir_modal(usuario?: Usuario): void {
+    this.usuario_edicao = usuario ?? null;
+    this.modal_aberto = true;
+  }
+
+  fechar_modal(): void {
+    this.modal_aberto = false;
+  }
+
+  salvar(usuario: Usuario): void {
+    this.service.salvar(usuario).subscribe(() => {
+      this.modal_aberto = false;
+    });
+  }
+}
+
+// ==============================
+// TESTE (JEST)
+// ==============================
+
+/*
+describe('UsuariosComponent', () => {
+
+  it('deve filtrar usuários', (done) => {
+    const service = new UsuarioService();
+    const component = new UsuariosComponent(service);
+
+    component.filtro.setValue('Jo');
+
+    component.vm$.subscribe(vm => {
+      expect(vm.usuarios.length).toBeGreaterThan(0);
+      done();
+    });
+  });
+
+});
+*/
