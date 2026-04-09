@@ -7,3 +7,4 @@ ng new app --standalone
 cd app
 npm start
 
+Nome do repositório: Desenvolvedor-Front-End-Angular
